@@ -1,0 +1,63 @@
+name: Release OpenDOS
+
+on:
+  push:
+    tags:
+      - 'opendos-v*'
+
+jobs:
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0 
+        
+    - name: Set up Git config
+      run: |
+        git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+    - name: Get current tag
+      id: get_tag
+      run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+    - name: Get previous tag (if any)
+      id: prev_tag
+      run: |
+        PREV=$(git tag --sort=-creatordate | grep '^opendos-v' | grep -v "${{ steps.get_tag.outputs.tag }}" | head -n 1 || true)
+        echo "previous_tag=$PREV" >> $GITHUB_OUTPUT
+
+    - name: Generate changelog
+      id: changelog
+      run: |
+        NEW_TAG=${{ steps.get_tag.outputs.tag }}
+        OLD_TAG=${{ steps.prev_tag.outputs.previous_tag }}
+        
+        if [ -z "$OLD_TAG" ]; then
+          echo "First release detected!"
+          git log -n 5 --pretty=format:"- %s" > body.txt
+          echo -e "\nFull commit history: https://github.com/${{ github.repository }}/commits/$NEW_TAG" >> body.txt
+        else
+          git log "$OLD_TAG..$NEW_TAG" -n 5 --pretty=format:"- %s" > body.txt
+          echo -e "\nFull changelog: https://github.com/${{ github.repository }}/compare/$OLD_TAG...$NEW_TAG" >> body.txt
+        fi
+
+    - name: Download build artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: opendos.img
+        path: ./release-assets
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ steps.get_tag.outputs.tag }}
+        name: ${{ steps.get_tag.outputs.tag }}
+        body_path: body.txt
+        files: ./release-assets/opendos.img
