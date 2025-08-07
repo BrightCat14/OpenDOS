@@ -17,12 +17,16 @@ jobs:
 
       - name: Extract tag name
         id: tag
-        run: echo "TAG_NAME=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "GITHUB_REF=$GITHUB_REF"
+          echo "TAG_NAME=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
 
       - name: Get latest 5 commits
         id: changelog
         run: |
+          echo "Fetching changelog..."
           LOG=$(git log -n 5 --pretty="* %s (%h)")
+          echo "$LOG"
           echo "log<<EOF" >> "$GITHUB_OUTPUT"
           echo "$LOG" >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
@@ -31,55 +35,52 @@ jobs:
         id: previous
         run: |
           PREV_TAG=$(git tag --sort=-creatordate | grep "^opendos-v" | grep -v "${{ steps.tag.outputs.TAG_NAME }}" | head -n 1 || true)
+          echo "Found previous tag: $PREV_TAG"
           echo "PREV_TAG=$PREV_TAG" >> "$GITHUB_OUTPUT"
 
       - name: Get changelog link
         id: compare_url
         run: |
           if [ -n "${{ steps.previous.outputs.PREV_TAG }}" ]; then
+            echo "Found previous tag, generating compare URL"
             echo "url=https://github.com/${{ github.repository }}/compare/${{ steps.previous.outputs.PREV_TAG }}...${{ steps.tag.outputs.TAG_NAME }}" >> "$GITHUB_OUTPUT"
           else
+            echo "No previous tag found, generating commit URL"
             echo "url=https://github.com/${{ github.repository }}/commits/${{ steps.tag.outputs.TAG_NAME }}" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Find workflow run with artifact
-        uses: actions/github-script@v7
-        id: find_run
-        with:
-          result-encoding: json
-          script: |
-            const runs = await github.rest.actions.listWorkflowRunsForRepo({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              per_page: 20,
-              status: 'success',
-              event: 'push'
-            });
+      - name: Install GitHub CLI
+        uses: cli/cli-action@v2
 
-            for (const run of runs.data.workflow_runs) {
-              const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                run_id: run.id
-              });
+      - name: Find and download opendos.img artifact from successful run
+        id: download_artifact
+        run: |
+          echo "Searching for latest successful workflow run with 'opendos.img' artifact..."
+          RUNS=$(gh api -X GET /repos/${{ github.repository }}/actions/runs?status=success&per_page=20)
+          RUN_IDS=$(echo "$RUNS" | jq -r '.workflow_runs[].id')
 
-              const found = artifacts.data.artifacts.find(a => a.name === "opendos.img");
-              if (found) {
-                return {
-                  artifact_id: found.id,
-                  run_id: run.id
-                };
-              }
-            }
+          for RUN_ID in $RUN_IDS; do
+            echo "Checking run ID: $RUN_ID"
+            ARTIFACTS=$(gh api -X GET /repos/${{ github.repository }}/actions/runs/$RUN_ID/artifacts)
+            ARTIFACT_ID=$(echo "$ARTIFACTS" | jq '.artifacts[] | select(.name == "opendos.img") | .id' || true)
 
-            throw new Error("Artifact 'opendos.img' not found");
+            if [ -n "$ARTIFACT_ID" ]; then
+              echo "Found artifact ID: $ARTIFACT_ID"
+              mkdir -p artifact
+              gh api -H "Accept: application/vnd.github+json" \
+                /repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip \
+                > artifact.zip
 
-      - name: Download opendos.img artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: opendos.img
-          path: ./artifact
-          run-id: ${{ steps.find_run.outputs.run_id }}
+              unzip artifact.zip -d artifact
+              ls -al artifact
+              break
+            fi
+          done
+
+          if [ ! -f artifact/opendos.img ]; then
+            echo "❌ Artifact not found!"
+            exit 1
+          fi
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -93,5 +94,4 @@ jobs:
             ${{ steps.changelog.outputs.log }}
 
             [Full changelog](${{ steps.compare_url.outputs.url }})
-
-          files: ./artifact/opendos.img
+          files: artifact/opendos.img
