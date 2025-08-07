@@ -1,0 +1,43 @@
+name: Build OpenDOS
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v3
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          gcc-multilib \
+          nasm \
+          grub-pc-bin \
+          grub-common \
+          mtools \
+          parted \
+          xorriso \
+          dosfstools \
+          qemu-system-x86 \
+          util-linux
+
+    - name: Make build.sh executable
+      run: chmod +x ./build.sh
+
+    - name: Build the OS image
+      run: sudo ./build.sh
+
+    - name: Upload OS image
+      uses: actions/upload-artifact@v4
+      with:
+        name: opendos.img
+        path: opendos.img

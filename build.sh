@@ -2,14 +2,14 @@
 
 BUILD_DIR="build"
 SRC_DIR="src"
-KERNEL_NAME="doskrnl"
+KERNEL_NAME="DOSKRNL.BIN"
 IMG_NAME="opendos.img"
 IMG_SIZE_MB=128
 MOUNT_POINT="img"
 GRUB_CFG="grub.cfg"
 
 ASM_FILES=("kernel.asm")  
-C_FILES=("kernel.c" "string.c" "io.c" "ata.c" "keyboard.c")    
+C_FILES=("kernel.c" "string.c" "io.c" "ata.c" "keyboard.c" "fat12.c" "fs.c" "speaker.c")    
 
 RED='\033[31m'
 GREEN='\033[32m'
@@ -70,7 +70,7 @@ link_kernel() {
 }
 
 create_image() {
-    echo -e "${BLUE}=== Creating image with MBR and FAT32 partition ===${NC}"
+    echo -e "${BLUE}=== Creating image with MBR and FAT12 partition ===${NC}"
 
     echo -n "Creating empty image file (${IMG_SIZE_MB}MB)... "
     dd if=/dev/zero of="$IMG_NAME" bs=1M count=$IMG_SIZE_MB status=none || { echo -e "${RED}Error!${NC}"; exit 1; }
@@ -85,8 +85,8 @@ create_image() {
     LOOP_DEV=$(sudo losetup --show -fP "$IMG_NAME") || { echo -e "${RED}Error!${NC}"; exit 1; }
     echo -e "${GREEN}OK (${LOOP_DEV})${NC}"
 
-    echo -n "Formatting partition as FAT32... "
-    sudo mkfs.fat -F 32 "${LOOP_DEV}p1" >/dev/null || { echo -e "${RED}Error!${NC}"; sudo losetup -d $LOOP_DEV; exit 1; }
+    echo -n "Formatting partition as FAT12... "
+    sudo mkfs.fat -F 12 "${LOOP_DEV}p1" >/dev/null || { echo -e "${RED}Error!${NC}"; sudo losetup -d $LOOP_DEV; exit 1; }
     echo -e "${GREEN}OK${NC}"
 
     echo -n "Mounting partition... "
@@ -94,8 +94,8 @@ create_image() {
     echo -e "${GREEN}OK${NC}"
 
     echo -n "Creating directories and copying kernel... "
-    sudo mkdir -p "$MOUNT_POINT/opendos" "$MOUNT_POINT/boot/grub"
-    sudo cp "$BUILD_DIR/$KERNEL_NAME" "$MOUNT_POINT/opendos/$KERNEL_NAME"
+    sudo mkdir -p "$MOUNT_POINT/OPENDOS" "$MOUNT_POINT/boot/grub"
+    sudo cp "$BUILD_DIR/$KERNEL_NAME" "$MOUNT_POINT/OPENDOS/$KERNEL_NAME"
     echo -e "${GREEN}OK${NC}"
 
     echo -n "Creating grub.cfg... "
@@ -104,7 +104,7 @@ set timeout=5
 set default=0
 
 menuentry "OpenDOS Kernel" {
-    multiboot /opendos/$KERNEL_NAME
+    multiboot /OPENDOS/$KERNEL_NAME
     boot
 }
 EOF

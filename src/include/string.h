@@ -26,6 +26,7 @@ char* strstr(const char* haystack, const char* needle);
 char* strtok(char* str, const char* delim);
 size_t strspn(const char* s, const char* accept);
 size_t strcspn(const char* s, const char* reject);
+int strcasecmp(const char *s1, const char *s2);
 
 #define isdigit(c) ((c) >= '0' && (c) <= '9')
 #define isalpha(c) (((c) >= 'a' && (c) <= 'z') || ((c) >= 'A' && (c) <= 'Z'))

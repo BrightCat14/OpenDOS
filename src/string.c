@@ -1,4 +1,5 @@
 #include "string.h"
+#include <stdint.h>
 
 void* memcpy(void* dest, const void* src, size_t n) {
     char* d = dest;
@@ -21,8 +22,15 @@ void* memmove(void* dest, const void* src, size_t n) {
 }
 
 void* memset(void* s, int c, size_t n) {
-    char* p = s;
-    while (n--) *p++ = (char)c;
+    if (!s) {
+        return NULL;
+    }
+    
+    uint8_t* p = (uint8_t*)s;
+    while (n--) {
+        *p++ = (uint8_t)c;
+    }
+    
     return s;
 }
 
@@ -151,4 +159,18 @@ size_t strcspn(const char* s, const char* reject) {
     size_t len = 0;
     while (*s && !strchr(reject, *s++)) len++;
     return len;
+}
+
+int strcasecmp(const char *s1, const char *s2) {
+    while (*s1 && *s2) {
+        unsigned char c1 = (unsigned char) tolower((unsigned char)*s1);
+        unsigned char c2 = (unsigned char) tolower((unsigned char)*s2);
+
+        if (c1 != c2) {
+            return c1 - c2;
+        }
+        s1++;
+        s2++;
+    }
+    return (unsigned char) tolower((unsigned char)*s1) - (unsigned char) tolower((unsigned char)*s2);
 }

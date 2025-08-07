@@ -4,15 +4,17 @@
 #include <colors.h>
 #include <keyboard.h>
 #include <ata.h>
+#include <fat12.h>
+#include "speaker.h"
 
 // defines
 #define VIDEO_MEMORY ((char*)0xB8000)
 #define WIDTH 80
 #define HEIGHT 25
 static char version[] = "v0.0.1";
-
-extern uint16_t cursor_pos;  
-extern uint16_t input_pos;  
+fat12_fs_t fs;
+uint16_t cursor_pos = 0;
+uint16_t input_pos = 0;
 
 void k_clear(void) {
     char *vidmem = VIDEO_MEMORY;
@@ -109,16 +111,36 @@ void sysinfo() {
 
 
 void k_init(void) {
-	
 	init_keyboard();
+	ata_init();
+
+	if (fat12_mount(&fs, 0) != 0) {
+		k_printf("FAT12 mount failed!\n");
+		return;
+	}
+	
+	// beep
+	speaker_beep(600); 
+	delay_ms(5000);
+	speaker_off();
 }
 
 void k_main(void) {
     k_init();
-    
+
+	fat12_file_t files[32];
+	fat12_file_t dir;
+	if (fat12_find(&fs, "OPENDOS", &dir) == 0 && dir.is_dir) { // fix fat12 driver please
+		int count = fat12_list_dir(&fs, dir.cluster, files, 32);
+		for (int i = 0; i < count; i++) {
+			k_printf("%s (%u bytes)\n", files[i].name, files[i].size);
+		}
+	}
+
     k_clear();
     k_printf("OpenDOS Kernel %s\n", version);
     sysinfo();
+    ata_print_devices();
     k_print("Type 'help' for commands\n> ");
     
     while(1) {
