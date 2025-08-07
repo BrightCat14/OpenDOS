@@ -10,8 +10,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Debug — Print tag
+      - name: Print Pushed Tag
         run: echo "Pushed tag:${{ github.ref_name }}"
+
+      - name: Checkout code
+        uses: actions/checkout@v4
 
       - name: Get repository info
         id: repo_info
@@ -19,65 +22,48 @@ jobs:
           echo "REPO=${{ github.repository }}" >> "$GITHUB_OUTPUT"
           echo "TAG=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
 
-      - name: Get latest successful build with opendos.img
+      - name: Find Latest Successful Artifact
         id: find_artifact
         uses: actions/github-script@v7
         with:
           script: |
-              let found = false;
-              
-              for (const run of runs.data.workflow_runs) {
-                const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
-                  owner,
-                  repo,
-                  run_id: run.id
-                });
-              
-                const match = artifacts.data.artifacts.find(a => a.name === 'opendos.img');
-                if (match) {
-                  core.setOutput('run_id', run.id);
-                  core.setOutput('artifact_id', match.id);
-                  core.info(`✅ Found artifact 'opendos.img' in run ${run.id}`);
-                  found = true;
-                  break;
-                }
-              }
-              
-              if (!found) {
-                core.setFailed('❌ No matching artifact (opendos.img) found in recent successful workflow runs');
-              }
-      - name: Download artifact from another workflow
-        uses: actions/github-script@v7
-        id: download_artifact
-        with:
-          script: |
-            const fs = require('fs');
-            const path = require('path');
-
-            const { artifact_id } = core.getInput('artifact_id', { required: true });
-            const { repo, owner } = context.repo;
-
-            const artifact = await github.rest.actions.downloadArtifact({
-              owner,
-              repo,
-              artifact_id: artifact_id,
-              archive_format: 'zip'
+            const runs = await github.rest.actions.listWorkflowRunsForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              status: 'success',
+              per_page: 20,
             });
+            let found;
+            for (const run of runs.data.workflow_runs) {
+              const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                run_id: run.id,
+              });
+              found = artifacts.data.artifacts.find(a => a.name === 'opendos.img');
+              if (found) {
+                core.setOutput('run_id', run.id);
+                core.setOutput('artifact_id', found.id);
+                break;
+              }
+            }
+            if (!found) {
+              core.setFailed('No matching artifact (opendos.img) found in recent successful workflow runs');
+            }
 
-            const zipPath = path.join(process.cwd(), 'artifact.zip');
-            const dest = fs.createWriteStream(zipPath);
-            const response = await fetch(artifact.url);
-            const buffer = await response.arrayBuffer();
-            fs.writeFileSync(zipPath, Buffer.from(buffer));
-            core.info('Downloaded artifact.zip');
-        env:
-          artifact_id: ${{ steps.find_artifact.outputs.artifact_id }}
+      - name: Download Artifact
+        uses: actions/download-artifact@v4
+        with:
+          # The artifact must be published with this name in the build workflow
+          name: opendos.img
+          path: .
+        # If you need to download from a different workflow, you must use the github-script approach
 
-      - name: Unzip artifact
-        run: unzip artifact.zip
-
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Unzip artifact (if zipped)
+        run: |
+          if [ -f opendos.img.zip ]; then
+            unzip -o opendos.img.zip
+          fi
 
       - name: Get changelog
         id: changelog
@@ -95,11 +81,13 @@ jobs:
             CHANGELOG_URL="${{ github.server_url }}/${{ github.repository }}/compare/$PREV_TAG...$TAG"
           fi
 
-          echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
-          echo "$COMMITS" >> $GITHUB_OUTPUT
-          echo "" >> $GITHUB_OUTPUT
-          echo "Full changelog: $CHANGELOG_URL" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          {
+            echo "CHANGELOG<<EOF"
+            echo "$COMMITS"
+            echo ""
+            echo "Full changelog: $CHANGELOG_URL"
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
