@@ -120,3 +120,5 @@ jobs:
           body: ${{ steps.changelog.outputs.CHANGELOG }}
           files: |
             opendos.img
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
