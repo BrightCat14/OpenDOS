@@ -1,5 +1,8 @@
-# OpenDOS
-
+# OpenDOS 
+![Build](https://github.com/BrightCat14/OpenDOS/actions/workflows/build.yml/badge.svg)
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
+![Status: WIP](https://img.shields.io/badge/status-active-blue)
+---
 A minimal test operating system for learning and experimentation with low-level programming.
 
 ## Features
