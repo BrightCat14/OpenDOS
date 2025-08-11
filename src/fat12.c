@@ -1,4 +1,3 @@
-// fat12.c
 #include "fat12.h"
 #include "ata.h"
 #include <string.h>
@@ -11,11 +10,11 @@
 static uint8_t sector_buffer[SECTOR_SIZE];
 
 static int read_sector(fat12_fs_t* fs, uint32_t lba, uint8_t* buf) {
-    return ata_read_sector(fs->drive, lba, buf);
+    return ata_read_sector(fs->drive, fs->partition_start_lba + lba, buf);
 }
 
 static int write_sector(fat12_fs_t* fs, uint32_t lba, const uint8_t* buf) {
-    return ata_write_sector(fs->drive, lba, buf);
+    return ata_write_sector(fs->drive, fs->partition_start_lba + lba, buf);
 }
 
 static uint32_t cluster_to_lba(fat12_fs_t* fs, uint16_t cluster) {
@@ -62,8 +61,29 @@ static uint16_t find_free_cluster(fat12_fs_t* fs) {
     return 0;
 }
 
+static int strcasecmp(const char* s1, const char* s2) {
+    while (*s1 && *s2) {
+        char c1 = tolower((unsigned char)*s1);
+        char c2 = tolower((unsigned char)*s2);
+        if (c1 != c2)
+            return c1 - c2;
+        s1++; s2++;
+    }
+    return *s1 - *s2;
+}
+
 int fat12_mount(fat12_fs_t* fs, ata_device_t* drive) {
-    if (ata_read_sector(drive, 0, sector_buffer) != 0)
+    uint8_t mbr[SECTOR_SIZE];
+    if (ata_read_sector(drive, 0, mbr) != 0)
+        return -1;
+    uint32_t partition_start = *(uint32_t*)&mbr[446 + 8];
+
+    if (partition_start == 0)
+        return -1;
+
+    fs->partition_start_lba = partition_start;
+
+    if (ata_read_sector(drive, fs->partition_start_lba, sector_buffer) != 0)
         return -1;
 
     fs->drive = drive;
@@ -75,7 +95,7 @@ int fat12_mount(fat12_fs_t* fs, ata_device_t* drive) {
     fs->total_sectors = *(uint16_t*)&sector_buffer[19];
     fs->sectors_per_fat = *(uint16_t*)&sector_buffer[22];
 
-    fs->fat_start_lba = fs->reserved_sectors;
+    fs->fat_start_lba = fs->partition_start_lba + fs->reserved_sectors;
     fs->root_dir_lba = fs->fat_start_lba + (fs->fat_count * fs->sectors_per_fat);
     fs->data_start_lba = fs->root_dir_lba + ((fs->root_entries * 32 + 511) / 512);
 
@@ -85,7 +105,7 @@ int fat12_mount(fat12_fs_t* fs, ata_device_t* drive) {
 int fat12_list_dir(fat12_fs_t* fs, uint16_t cluster, fat12_file_t* out, int max) {
     int found = 0;
     uint32_t lba = cluster == 0 ? fs->root_dir_lba : cluster_to_lba(fs, cluster);
-    int entries = cluster == 0 ? fs->root_entries : 512 / 32;
+    int entries = cluster == 0 ? fs->root_entries : (fs->sectors_per_cluster * (fs->bytes_per_sector / 32));
 
     for (int s = 0; s < 14 && found < max; s++) {
         if (read_sector(fs, lba + s, sector_buffer) != 0)
@@ -106,7 +126,7 @@ int fat12_list_dir(fat12_fs_t* fs, uint16_t cluster, fat12_file_t* out, int max)
         }
         if (cluster == 0) break;
         cluster = read_fat_entry(fs, cluster);
-        if (cluster >= 0xFF8) break;
+        if (cluster >= CLUSTER_EOF) break;
         lba = cluster_to_lba(fs, cluster);
     }
     return found;
@@ -142,11 +162,12 @@ int fat12_find(fat12_fs_t* fs, const char* path, fat12_file_t* out) {
 int fat12_read_file(fat12_fs_t* fs, fat12_file_t* file, uint8_t* buf, uint32_t max) {
     uint16_t cluster = file->cluster;
     uint32_t total = 0;
-    while (cluster < 0xFF8 && total < max) {
+    while (cluster < CLUSTER_EOF && total < max) {
         uint32_t lba = cluster_to_lba(fs, cluster);
         for (int i = 0; i < fs->sectors_per_cluster; i++) {
             if (total >= file->size || total >= max) break;
-            read_sector(fs, lba + i, &buf[total]);
+            if (read_sector(fs, lba + i, &buf[total]) != 0)
+                return total;
             total += fs->bytes_per_sector;
         }
         cluster = read_fat_entry(fs, cluster);
@@ -180,8 +201,9 @@ int fat12_write_file(fat12_fs_t* fs, const char* path, const uint8_t* data, uint
     while (written < size) {
         uint32_t lba = cluster_to_lba(fs, cluster);
         for (int i = 0; i < fs->sectors_per_cluster && written < size; i++) {
-            write_sector(fs, lba + i, &data[written]);
-            written += SECTOR_SIZE;
+            if (write_sector(fs, lba + i, &data[written]) != 0)
+                return -4;
+            written += fs->bytes_per_sector;
         }
         uint16_t next = (written < size) ? find_free_cluster(fs) : CLUSTER_EOF;
         write_fat_entry(fs, cluster, next);
@@ -190,12 +212,30 @@ int fat12_write_file(fat12_fs_t* fs, const char* path, const uint8_t* data, uint
 
     uint32_t lba = dir.cluster == 0 ? fs->root_dir_lba : cluster_to_lba(fs, dir.cluster);
     for (int s = 0; s < 14; s++) {
-        read_sector(fs, lba + s, sector_buffer);
+        if (read_sector(fs, lba + s, sector_buffer) != 0)
+            return -5;
         for (int i = 0; i < 16; i++) {
             uint8_t* e = &sector_buffer[i * 32];
             if (e[0] == 0x00 || e[0] == 0xE5) {
                 memset(e, 0, 32);
-                memcpy(e, filename, strlen(filename));
+                char name8[8] = { ' ' };
+                char ext3[3] = { ' ' };
+                const char* dot = strrchr(filename, '.');
+                if (dot) {
+                    size_t nlen = dot - filename;
+                    if (nlen > 8) nlen = 8;
+                    memcpy(name8, filename, nlen);
+                    size_t elen = strlen(dot + 1);
+                    if (elen > 3) elen = 3;
+                    memcpy(ext3, dot + 1, elen);
+                } else {
+                    size_t nlen = strlen(filename);
+                    if (nlen > 8) nlen = 8;
+                    memcpy(name8, filename, nlen);
+                }
+                memcpy(e, name8, 8);
+                memcpy(e + 8, ext3, 3);
+
                 e[11] = 0x20;
                 *(uint16_t*)&e[26] = first_cluster;
                 *(uint32_t*)&e[28] = size;

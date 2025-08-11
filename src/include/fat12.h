@@ -5,7 +5,7 @@
 #include <ata.h>
 
 typedef struct {
-    ata_device_t* drive;      
+    ata_device_t* drive;
     uint16_t bytes_per_sector;
     uint8_t sectors_per_cluster;
     uint16_t reserved_sectors;
@@ -16,10 +16,12 @@ typedef struct {
     uint32_t fat_start_lba;
     uint32_t root_dir_lba;
     uint32_t data_start_lba;
+
+    uint32_t partition_start_lba;
 } fat12_fs_t;
 
 typedef struct {
-    char name[13];   
+    char name[13];
     uint16_t cluster;
     uint32_t size;
     uint8_t is_dir;
