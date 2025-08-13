@@ -33,6 +33,11 @@ Requirements:
 ./run.sh  # (or use your preferred emulator)
 ```
 
+## Community
+
+* 💬 [GitHub Discussions](https://github.com/BrightCat14/OpenDOS/discussions) — ask questions, suggest ideas, and discuss development.
+* 📢 [Telegram Channel](https://t.me/opendosc) — announcements and updates.
+
 ## License
 
 [MIT](LICENSE.md)
