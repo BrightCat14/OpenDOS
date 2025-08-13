@@ -9,7 +9,7 @@ MOUNT_POINT="img"
 GRUB_CFG="grub.cfg"
 
 ASM_FILES=("kernel.asm")  
-C_FILES=("kernel.c" "string.c" "io.c" "ata.c" "keyboard.c" "fat12.c" "fs.c" "speaker.c")    
+C_FILES=("kernel.c" "string.c" "io.c" "ata.c" "keyboard.c" "fat12.c" "fs.c" "speaker.c" "syscall.c")    
 
 RED='\033[31m'
 GREEN='\033[32m'
