@@ -36,7 +36,7 @@ Requirements:
 ## Community
 
 * 💬 [GitHub Discussions](https://github.com/BrightCat14/OpenDOS/discussions) — ask questions, suggest ideas, and discuss development.
-* 📢 [Telegram Channel](https://t.me/opendosc) — announcements and updates.
+* 📢 [Telegram Group](https://t.me/opendosc) — announcements and chatting about all.
 
 ## License
 
