@@ -11,7 +11,7 @@
 #define VIDEO_MEMORY ((char*)0xB8000)
 #define WIDTH 80
 #define HEIGHT 25
-static char version[] = "v0.0.1";
+static char version[] = "v0.0.3";
 fat12_fs_t fs;
 uint16_t cursor_pos = 0;
 uint16_t input_pos = 0;
@@ -178,16 +178,6 @@ void k_main(void) {
     sysinfo();
     ata_print_devices();
 
-    k_printf("ANSI Color Test:");
-    k_printf("\x1b[30mBlack   \x1b[0m\n");
-    k_printf("\x1b[31mRed     \x1b[0m\n");
-    k_printf("\x1b[32mGreen   \x1b[0m\n");
-    k_printf("\x1b[33mYellow  \x1b[0m\n");
-    k_printf("\x1b[34mBlue    \x1b[0m\n");
-    k_printf("\x1b[35mMagenta \x1b[0m\n");
-    k_printf("\x1b[36mCyan    \x1b[0m\n");
-    k_printf("\x1b[37mWhite   \x1b[0m\n");
-
     k_print("Type 'help' for commands\n> ");
     
     while(1) {
@@ -195,3 +185,4 @@ void k_main(void) {
         __asm__("pause");
     }
 }
+
