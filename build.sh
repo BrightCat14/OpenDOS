@@ -77,8 +77,9 @@ create_image() {
     echo -e "${GREEN}OK${NC}"
 
     echo -n "Creating partition table and partition... "
-    parted -s "$IMG_NAME" mklabel msdos
-    parted -s "$IMG_NAME" mkpart primary fat32 1MiB 100%
+	parted -s "$IMG_NAME" mklabel msdos
+	parted -s "$IMG_NAME" mkpart primary 1MiB 100%
+	echo "type=1" | sfdisk --part-type "$IMG_NAME" 1
     echo -e "${GREEN}OK${NC}"
 
     echo -n "Setting up loop device with partitions... "
