@@ -30,8 +30,8 @@ jobs:
           qemu-system-x86 \
           util-linux
 
-    - name: Make build.sh executable
-      run: chmod +x ./build.sh
+    - name: Make build scripts executable
+      run: chmod +x ./build.sh && chmod +x ./build-image.sh
 
     - name: Build the OS image
       run: sudo ./build.sh
