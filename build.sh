@@ -129,8 +129,14 @@ main() {
     compile_asm
     compile_c
     link_kernel
-    create_image
-    echo -e "${PURPLE}=== Image $IMG_NAME ready! ===${NC}"
+    
+    # Call the image creation script
+    if [ -f "build-image.sh" ]; then
+        ./build-image.sh
+    else
+        create_image
+        echo -e "${PURPLE}=== Image $IMG_NAME ready! ===${NC}"
+    fi
 }
 
 main "$@"
